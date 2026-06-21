@@ -6,6 +6,8 @@ import {
   getSignalColor,
   WeatherSystem,
   lerp,
+  validateSignals,
+  formatCheckResults,
   type SignalMatch
 } from './signal';
 import type { Signal, SignalsData, TunerState, WeatherOffset } from './types';
@@ -31,6 +33,7 @@ class Game {
   private signalOverlayActive: boolean = false;
   private binaryStream: string = '';
   private binaryTimer: number = 0;
+  private diagnosticActive: boolean = false;
 
   private elements: {
     signalFill: HTMLElement;
@@ -40,6 +43,10 @@ class Game {
     binaryStream: HTMLElement;
     foundCount: HTMLElement;
     audioToggle: HTMLButtonElement;
+    diagnosticToggle: HTMLButtonElement;
+    diagnosticOverlay: HTMLElement;
+    diagnosticContent: HTMLElement;
+    diagnosticClose: HTMLButtonElement;
   };
 
   constructor() {
@@ -61,7 +68,11 @@ class Game {
       signalDescription: get('signalOverlay').querySelector('.signal-description') as HTMLElement,
       binaryStream: get('signalOverlay').querySelector('.binary-stream') as HTMLElement,
       foundCount: get('foundCount'),
-      audioToggle: get('audioToggle') as HTMLButtonElement
+      audioToggle: get('audioToggle') as HTMLButtonElement,
+      diagnosticToggle: get('diagnosticToggle') as HTMLButtonElement,
+      diagnosticOverlay: get('diagnosticOverlay'),
+      diagnosticContent: get('diagnosticContent'),
+      diagnosticClose: get('diagnosticClose') as HTMLButtonElement
     };
   }
 
@@ -119,6 +130,14 @@ class Game {
       this.elements.audioToggle.classList.toggle('active', enabled);
     });
 
+    this.elements.diagnosticToggle.addEventListener('click', () => {
+      this.toggleDiagnostic();
+    });
+
+    this.elements.diagnosticClose.addEventListener('click', () => {
+      this.toggleDiagnostic(false);
+    });
+
     window.addEventListener('resize', () => {
       this.renderer?.resize();
     });
@@ -132,6 +151,41 @@ class Game {
     const response = await fetch('/signals.json');
     if (!response.ok) throw new Error('Failed to load signals');
     return response.json();
+  }
+
+  private toggleDiagnostic(forceState?: boolean): void {
+    const shouldShow = forceState !== undefined ? forceState : !this.diagnosticActive;
+
+    if (shouldShow !== this.diagnosticActive) {
+      this.diagnosticActive = shouldShow;
+      this.elements.diagnosticOverlay.classList.toggle('active', shouldShow);
+      this.elements.diagnosticToggle.classList.toggle('active', shouldShow);
+
+      if (shouldShow) {
+        this.runDiagnostic();
+      }
+    }
+  }
+
+  private runDiagnostic(): void {
+    const results = validateSignals(this.signals);
+    const formatted = formatCheckResults(results);
+
+    this.elements.diagnosticContent.textContent = '';
+    this.typeText(formatted, 0);
+  }
+
+  private typeText(text: string, index: number): void {
+    if (index >= text.length) return;
+
+    const current = text.substring(0, index + 1);
+    this.elements.diagnosticContent.textContent = current;
+    this.elements.diagnosticContent.scrollTop = this.elements.diagnosticContent.scrollHeight;
+
+    if (this.diagnosticActive) {
+      const delay = text[index] === '\n' ? 40 : 8;
+      setTimeout(() => this.typeText(text, index + 1), delay);
+    }
   }
 
   private updateSignalMatch(): void {

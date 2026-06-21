@@ -1,5 +1,133 @@
 import type { TunerState, Signal, WeatherOffset, WeatherConfig } from './types';
 
+export type CheckSeverity = 'error' | 'warning' | 'info';
+
+export interface SignalCheckResult {
+  id: string;
+  signalName?: string;
+  severity: CheckSeverity;
+  category: string;
+  message: string;
+}
+
+export function validateSignals(signals: Signal[]): SignalCheckResult[] {
+  const results: SignalCheckResult[] = [];
+  const idCounts = new Map<string, number>();
+
+  for (const signal of signals) {
+    idCounts.set(signal.id, (idCounts.get(signal.id) || 0) + 1);
+  }
+
+  for (const [id, count] of idCounts) {
+    if (count > 1) {
+      results.push({
+        id: id,
+        severity: 'error',
+        category: 'DUPLICATE_ID',
+        message: `重复编号: ${id} 出现 ${count} 次`
+      });
+    }
+  }
+
+  for (const signal of signals) {
+    const ranges: { name: string; range: [number, number] }[] = [
+      { name: 'vhfRange', range: signal.vhfRange },
+      { name: 'uhfRange', range: signal.uhfRange },
+      { name: 'antennaAngle', range: signal.antennaAngle }
+    ];
+
+    for (const { name, range } of ranges) {
+      if (range[0] > range[1]) {
+        results.push({
+          id: signal.id,
+          signalName: signal.name,
+          severity: 'error',
+          category: 'RANGE_INVERTED',
+          message: `[${signal.name}] ${name} 范围倒置: [${range[0]}, ${range[1]}]`
+        });
+      }
+    }
+
+    if (signal.intensity < 0 || signal.intensity > 1) {
+      results.push({
+        id: signal.id,
+        signalName: signal.name,
+        severity: 'error',
+        category: 'INTENSITY_OUT_OF_BOUNDS',
+        message: `[${signal.name}] 强度越界: ${signal.intensity} (应在 0-1 之间)`
+      });
+    }
+
+    if (!signal.fragmentPath || !signal.fragmentPath.startsWith('#')) {
+      results.push({
+        id: signal.id,
+        signalName: signal.name,
+        severity: 'error',
+        category: 'BINARY_INVALID',
+        message: `[${signal.name}] 二进制片段格式异常: 缺少 # 前缀`
+      });
+    } else {
+      const binaryPart = signal.fragmentPath.substring(1);
+      if (binaryPart.length === 0) {
+        results.push({
+          id: signal.id,
+          signalName: signal.name,
+          severity: 'warning',
+          category: 'BINARY_EMPTY',
+          message: `[${signal.name}] 二进制片段为空`
+        });
+      } else if (!/^[01]+$/.test(binaryPart)) {
+        results.push({
+          id: signal.id,
+          signalName: signal.name,
+          severity: 'error',
+          category: 'BINARY_INVALID',
+          message: `[${signal.name}] 二进制片段包含非法字符: 仅允许 0 和 1`
+        });
+      }
+    }
+
+    if (!signal.description || signal.description.trim() === '') {
+      results.push({
+        id: signal.id,
+        signalName: signal.name,
+        severity: 'warning',
+        category: 'MISSING_DESCRIPTION',
+        message: `[${signal.name}] 缺失描述`
+      });
+    }
+  }
+
+  return results;
+}
+
+export function formatCheckResults(results: SignalCheckResult[]): string {
+  if (results.length === 0) {
+    return '[INFO] 体检完成: 所有频道数据正常 ✓';
+  }
+
+  const lines: string[] = [];
+  const errorCount = results.filter(r => r.severity === 'error').length;
+  const warningCount = results.filter(r => r.severity === 'warning').length;
+
+  lines.push('╔══════════════════════════════════════════════════════════════╗');
+  lines.push('║          CHANNEL ZERO - 频道数据体检报告                     ║');
+  lines.push('╚══════════════════════════════════════════════════════════════╝');
+  lines.push('');
+  lines.push(`[SUMMARY] 共发现 ${errorCount} 个错误, ${warningCount} 个警告`);
+  lines.push('');
+
+  for (const result of results) {
+    const tag = result.severity === 'error' ? 'ERROR' : result.severity === 'warning' ? 'WARN ' : 'INFO ';
+    lines.push(`[${tag}] ${result.message}`);
+  }
+
+  lines.push('');
+  lines.push('═══════════════════════════════════════════════════════════════');
+
+  return lines.join('\n');
+}
+
 export function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }

@@ -18,6 +18,13 @@
           <div class="signal-description"></div>
           <div class="binary-stream"></div>
         </div>
+        <div id="diagnosticOverlay" class="diagnostic-overlay">
+          <div class="diagnostic-header">
+            <span class="diagnostic-title">▶ DIAGNOSTIC TERMINAL</span>
+            <button class="diagnostic-close" id="diagnosticClose">×</button>
+          </div>
+          <div class="diagnostic-content" id="diagnosticContent"></div>
+        </div>
       </div>
       
       <div class="tv-body">
@@ -63,6 +70,10 @@
           <button class="power-button" id="audioToggle">
             <span class="power-icon">◉</span>
             <span class="power-label">AUDIO</span>
+          </button>
+          <button class="diagnostic-button" id="diagnosticToggle">
+            <span class="power-icon">⚙</span>
+            <span class="power-label">DIAG</span>
           </button>
         </div>
         
